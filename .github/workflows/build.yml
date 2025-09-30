@@ -1,6 +1,7 @@
 name: Build Mesa (aarch64)
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - main
