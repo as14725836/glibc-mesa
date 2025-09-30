@@ -76,12 +76,12 @@ jobs:
         name: mesa-${{ env.VERSION }}-aarch64
         path: mesa-${{ env.VERSION }}-aarch64.tar.gz
         
-    - name: Release "freedreno"
+    - name:  上传到Release
       uses: softprops/action-gh-release@v1
       with:
-        body: freedreno aarch64
+        body: mesa build for aarch64
         tag_name: github_run
-        name: Weekly Action Release
+        name: mesa
         files: |
           mesa-${{ env.VERSION }}-aarch64.tar.gz
 
