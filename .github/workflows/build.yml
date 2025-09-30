@@ -35,7 +35,7 @@ jobs:
         mkdir -p builddir
         meson setup builddir \
           --libdir=lib \
-          -Dprefix=/data/data/com.termux/files/usr/glibc \
+          -Dprefix=/mnt/mesa \
           -Dbuildtype=release \
           -Doptimization=3 \
           -Dplatforms=x11 \
@@ -65,14 +65,13 @@ jobs:
           -Dstrip=true
 
         ninja -C builddir
-        mkdir -p builddir/install
-        ninja -C builddir install DESTDIR=$PWD/builddir/install
+        ninja -C builddir install
 
-        cd builddir/install
-        tar -czf ../../mesa-aarch64.tar.gz *
+        
+        tar -czf mesa-aarch64.tar.gz /mnt/mesa
 
     - name: 上传构建产物
       uses: actions/upload-artifact@v4
       with:
         name: mesa-aarch64
-        path: mesa/mesa-aarch64.tar.gz
+        path: mesa/mesa-aarch64.tar.gz 
