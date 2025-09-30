@@ -83,7 +83,7 @@ jobs:
 
     - name: 发布到 GitHub Release (仅 Tag 时)
       if: startsWith(github.ref, 'refs/tags/')
-      uses: softprops/action-gh-release@v2
+      uses: softprops/action-gh-release@v1
       with:
         tag_name: ${{ github.ref_name }}
         name: Mesa ${{ env.VERSION }} (aarch64, Termux glibc)
