@@ -31,11 +31,13 @@ jobs:
     - name: 构建 Mesa
       run: |
         cd mesa
+        sudo mkdir -p /data/data/com.termux/files/usr/glibc
+        sudo chmod 777 -R /data
 
         mkdir -p builddir
         meson setup builddir \
           --libdir=lib \
-          -Dprefix=$(pwd)/mesa \
+          -Dprefix=/data/data/com.termux/files/usr/glibc \
           -Dbuildtype=release \
           -Doptimization=3 \
           -Db_lto=true \
@@ -66,7 +68,7 @@ jobs:
         VERSION=$(cat VERSION)
         echo "VERSION=$VERSION" >> $GITHUB_ENV
 
-        tar -czf mesa-${VERSION}-aarch64.tar.gz ./mesa
+        tar -czf mesa-${VERSION}-aarch64.tar.gz /data/data/com.termux/files/usr/glibc
         mv mesa-${VERSION}-aarch64.tar.gz ..
 
     - name: 上传构建产物
