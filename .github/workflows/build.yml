@@ -8,28 +8,17 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-arm
 
     steps:
     - name: 检出源码
       uses: actions/checkout@v4
 
-    - name: 安装依赖和最新 Meson
+    - name: 安装依赖
       run: |
-        sudo apt-get update
-        sudo apt-get install -y \
-          python3-pip ninja-build git \
-          bison flex gettext tar \
-          gcc-aarch64-linux-gnu g++-aarch64-linux-gnu \
-          libdrm-dev libx11-dev libxext-dev \
-          libxdamage-dev libxfixes-dev libxrandr-dev \
-          libxrender-dev libxshmfence-dev libxinerama-dev \
-          libvulkan-dev \
-          libva-dev libvdpau-dev \
-          glslang-tools
-        # 安装最新 Meson 和 Mako
-        pip3 install --upgrade meson Mako
-
+        sudo sed -i "s/^Types: deb$/Types: deb deb-src/" /etc/apt/sources.list.d/ubuntu.sources
+        sudo apt update
+        sudo apt-get build-dep mesa
     - name: 克隆 Mesa
       run: |
         git clone https://gitlab.freedesktop.org/mesa/mesa.git
@@ -37,35 +26,13 @@ jobs:
         # 如果需要固定版本，可以取消下面注释
         # git checkout mesa-24.2.5
 
-    - name: 写入 termux-cross.txt
-      run: |
-        cat > mesa/termux-cross.txt <<'EOF'
-        [binaries]
-        c = 'aarch64-linux-gnu-gcc'
-        cpp = 'aarch64-linux-gnu-g++'
-        ar = 'aarch64-linux-gnu-ar'
-        strip = 'aarch64-linux-gnu-strip'
-        pkgconfig = 'pkg-config'
 
-        [host_machine]
-        system = 'linux'
-        cpu_family = 'aarch64'
-        cpu = 'aarch64'
-        endian = 'little'
-
-        [properties]
-        needs_exe_wrapper = true
-        sys_root = '/data/data/com.termux/files/usr/glibc'
-        pkg_config_libdir = '/data/data/com.termux/files/usr/glibc/lib/pkgconfig:/data/data/com.termux/files/usr/glibc/share/pkgconfig'
-        EOF
-
-    - name: 构建 Mesa (交叉编译)
+    - name: 构建 Mesa
       run: |
         cd mesa
 
         mkdir -p builddir
         meson setup builddir \
-          --cross-file=termux-cross.txt \
           --libdir=lib \
           -Dprefix=/data/data/com.termux/files/usr/glibc \
           -Dbuildtype=release \
