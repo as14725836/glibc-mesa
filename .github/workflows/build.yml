@@ -14,20 +14,21 @@ jobs:
     - name: 检出源码
       uses: actions/checkout@v4
 
-    - name: 安装依赖
+    - name: 安装依赖和最新 Meson
       run: |
         sudo apt-get update
         sudo apt-get install -y \
-          git meson ninja-build python3-mako \
-          pkg-config bison flex gettext \
-          gcc-aarch64-linux-gnu g++-aarch64-linux-gnu \
-          zip tar
+          python3-pip ninja-build \
+          git bison flex gettext tar \
+          gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
+        # 使用 pip 安装最新 Meson
+        pip3 install --upgrade meson
 
     - name: 克隆 Mesa
       run: |
         git clone https://gitlab.freedesktop.org/mesa/mesa.git
         cd mesa
-        # 如果你想固定版本，可以加上：
+        # 如果需要固定版本，可以取消下面注释
         # git checkout mesa-24.2.5
 
     - name: 写入 cross_aarch64.txt
