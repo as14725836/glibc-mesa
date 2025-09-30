@@ -9,7 +9,7 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-arm
+    runs-on: ubuntu-24.04-arm
 
     steps:
     - name: 检出源码
