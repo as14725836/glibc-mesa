@@ -24,7 +24,7 @@ jobs:
           libdrm-dev libx11-dev libxext-dev \
           libxdamage-dev libxfixes-dev libxrandr-dev \
           libxrender-dev libxshmfence-dev libxinerama-dev \
-          libvulkan-dev vulkan-utils \
+          libvulkan-dev \
           libva-dev libvdpau-dev \
           glslang-tools
         # 安装最新 Meson 和 Mako
