@@ -1,0 +1,86 @@
+name: Build Mesa (aarch64)
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: 检出源码
+      uses: actions/checkout@v4
+
+    - name: 安装依赖
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          git meson ninja-build python3-mako \
+          pkg-config bison flex gettext \
+          gcc-aarch64-linux-gnu g++-aarch64-linux-gnu \
+          zip tar
+
+    - name: 克隆 Mesa
+      run: |
+        git clone https://gitlab.freedesktop.org/mesa/mesa.git
+        cd mesa
+        # 如果你想固定版本，可以加上：
+        # git checkout mesa-24.2.5
+
+    - name: 写入 cross_aarch64.txt
+      run: |
+        cat > mesa/cross_aarch64.txt <<'EOF'
+        [binaries]
+        c = 'aarch64-linux-gnu-gcc'
+        cpp = 'aarch64-linux-gnu-g++'
+        ar = 'aarch64-linux-gnu-ar'
+        strip = 'aarch64-linux-gnu-strip'
+        pkgconfig = 'pkg-config'
+
+        [host_machine]
+        system = 'linux'
+        cpu_family = 'aarch64'
+        cpu = 'aarch64'
+        endian = 'little'
+
+        [properties]
+        needs_exe_wrapper = true
+        sys_root = '/data/data/com.termux/files/usr/glibc'
+        pkg_config_libdir = '/data/data/com.termux/files/usr/glibc/lib/pkgconfig:/data/data/com.termux/files/usr/glibc/share/pkgconfig'
+        EOF
+
+    - name: 构建 Mesa (交叉编译)
+      run: |
+        cd mesa
+
+        mkdir build
+        meson setup build \
+          --cross-file cross_aarch64.txt \
+          -Dprefix=/data/data/com.termux/files/usr/glibc \
+          -Dplatforms=x11,wayland,drm,surfaceless \
+          -Ddri-drivers=[] \
+          -Dgallium-drivers=swrast,zink,kmsro,freedreno,virgl \
+          -Dvulkan-drivers=freedreno,swrast \
+          -Dglx=dri \
+          -Dshared-glapi=true \
+          -Dgles1=true \
+          -Dgles2=true \
+          -Degl=true \
+          -Dllvm=disabled \
+          -Dbuildtype=release
+
+        ninja -C build
+        mkdir -p build/install
+        ninja -C build install DESTDIR=$PWD/build/install
+
+        cd build/install
+        tar -czf ../../mesa-aarch64.tar.gz *
+
+    - name: 上传构建产物
+      uses: actions/upload-artifact@v4
+      with:
+        name: mesa-aarch64
+        path: mesa/mesa-aarch64.tar.gz
