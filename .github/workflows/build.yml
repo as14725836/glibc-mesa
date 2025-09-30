@@ -87,7 +87,6 @@ jobs:
           -Dvulkan-beta=true \
           -Dgallium-drivers=zink,freedreno \
           -Dvulkan-drivers=freedreno \
-          -Dfreedreno-kmds=kgsl \
           -Dvideo-codecs=all \
           -Dshader-cache-max-size="2G" \
           -Dgbm=enabled \
