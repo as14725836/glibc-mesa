@@ -19,14 +19,14 @@ jobs:
       run: |
         sudo sed -i "s/^Types: deb$/Types: deb deb-src/" /etc/apt/sources.list.d/ubuntu.sources
         sudo apt update
-        sudo apt-get build-dep mesa
+        sudo apt-get build-dep mesa -y
+
     - name: 克隆 Mesa
       run: |
         git clone https://gitlab.freedesktop.org/mesa/mesa.git
         cd mesa
         # 如果需要固定版本，可以取消下面注释
         # git checkout mesa-24.2.5
-
 
     - name: 构建 Mesa
       run: |
@@ -35,19 +35,19 @@ jobs:
         mkdir -p builddir
         meson setup builddir \
           --libdir=lib \
-          -Dprefix=/opt/mesa \
+          -Dprefix=$(pwd)/mesa \
           -Dbuildtype=release \
           -Doptimization=3 \
+          -Db_lto=true \
           -Dplatforms=x11 \
           -Degl-native-platform=x11 \
           -Dglx=dri \
           -Dglx-direct=true \
           -Dopengl=true \
+          -Dgles1=enabled \
+          -Dgles2=enabled \
           -Dglvnd=disabled \
           -Degl=enabled \
-          -Dlibunwind=disabled \
-          -Dmicrosoft-clc=disabled \
-          -Dvalgrind=disabled \
           -Dllvm=disabled \
           -Dshared-llvm=disabled \
           -Dshader-cache=enabled \
@@ -55,23 +55,27 @@ jobs:
           -Dvulkan-beta=true \
           -Dgallium-drivers=zink,freedreno \
           -Dvulkan-drivers=freedreno \
+          -Dfreedreno-kmds=msm,kgsl \
           -Dvideo-codecs=all \
-          -Dshader-cache-max-size="2G" \
           -Dgbm=enabled \
-          -Ddefault_library=static \
-          -Dtools=freedreno \
-          -Db_ndebug=true \
-          -Db_lto=true \
-          -Dstrip=true
+          -Dtools=drm-shim,freedreno
 
         ninja -C builddir
         ninja -C builddir install
 
-        
-        tar -czf mesa-aarch64.tar.gz ./mesa
+        VERSION=$(cat VERSION)
+        echo "VERSION=$VERSION" >> $GITHUB_ENV
+
+        tar -czf mesa-${VERSION}-aarch64.tar.gz ./mesa
+        mv mesa-${VERSION}-aarch64.tar.gz ..
 
     - name: 上传构建产物
       uses: actions/upload-artifact@v4
       with:
-        name: mesa-aarch64
-        path: mesa/mesa-aarch64.tar.gz 
+        name: mesa-${{ env.VERSION }}-aarch64
+        path: mesa-${{ env.VERSION }}-aarch64.tar.gz
+
+    - name: 输出版本信息
+      run: |
+        echo "✅ Mesa 构建完成"
+        echo "版本号: $VERSION"
