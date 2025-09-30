@@ -68,16 +68,25 @@ jobs:
         VERSION=$(cat VERSION)
         echo "VERSION=$VERSION" >> $GITHUB_ENV
 
-        tar -czf mesa-${VERSION}-aarch64.tar.gz /data/data/com.termux/files/usr/glibc
-        mv mesa-${VERSION}-aarch64.tar.gz ..
+        tar -czf termux-glibc-mesa-${VERSION}-aarch64.tar.gz /data/data/com.termux/files/usr/glibc
+        mv termux-glibc-mesa-${VERSION}-aarch64.tar.gz ..
 
     - name: 上传构建产物
       uses: actions/upload-artifact@v4
       with:
-        name: mesa-${{ env.VERSION }}-aarch64
-        path: mesa-${{ env.VERSION }}-aarch64.tar.gz
+        name: termux-glibc-mesa-${{ env.VERSION }}-aarch64
+        path: termux-glibc-mesa-${{ env.VERSION }}-aarch64.tar.gz
+
+    - name: 发布到 GitHub Release
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: mesa-${{ env.VERSION }}
+        name: Mesa ${{ env.VERSION }} (aarch64, Termux glibc)
+        files: termux-glibc-mesa-${{ env.VERSION }}-aarch64.tar.gz
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
     - name: 输出版本信息
       run: |
-        echo "✅ Mesa 构建完成"
+        echo "✅ Mesa 构建完成并发布 Release"
         echo "版本号: $VERSION"
