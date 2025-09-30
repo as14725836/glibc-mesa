@@ -5,7 +5,6 @@ on:
   push:
     branches:
       - main
-  pull_request:
 
 jobs:
   build:
@@ -76,6 +75,15 @@ jobs:
       with:
         name: mesa-${{ env.VERSION }}-aarch64
         path: mesa-${{ env.VERSION }}-aarch64.tar.gz
+        
+    - name: Release "freedreno"
+      uses: softprops/action-gh-release@v1
+      with:
+        body: freedreno aarch64
+        tag_name: github_run
+        name: Weekly Action Release
+        files: |
+          mesa-${{ env.VERSION }}-aarch64.tar.gz
 
     - name: 输出版本信息
       run: |
