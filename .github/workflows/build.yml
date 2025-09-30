@@ -22,8 +22,8 @@ jobs:
           git bison flex gettext tar \
           gcc-aarch64-linux-gnu g++-aarch64-linux-gnu \
           glslang-tools
-        # 使用 pip 安装最新 Meson
-        pip3 install --upgrade meson
+        # 安装最新 Meson 和 Mako
+        pip3 install --upgrade meson Mako
 
     - name: 克隆 Mesa
       run: |
