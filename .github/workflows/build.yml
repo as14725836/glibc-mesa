@@ -6,7 +6,6 @@ on:
     branches:
       - main
       - 'refs/tags/**'
-  pull_request:
 
 permissions:
   contents: write  # 允许 GITHUB_TOKEN 创建 Release
@@ -81,8 +80,7 @@ jobs:
         name: termux-glibc-mesa-${{ env.VERSION }}-aarch64
         path: termux-glibc-mesa-${{ env.VERSION }}-aarch64.tar.gz
 
-    - name: 发布到 GitHub Release (仅 Tag 时)
-      if: startsWith(github.ref, 'refs/tags/')
+    - name: 发布到 GitHub Release
       uses: softprops/action-gh-release@v1
       with:
         tag_name: ${{ github.ref_name }}
