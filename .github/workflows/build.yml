@@ -29,7 +29,7 @@ jobs:
         git clone https://gitlab.freedesktop.org/mesa/mesa.git
         cd mesa
         # 如果需要固定版本，可以取消下面注释
-        # git checkout mesa-24.2.5
+        git checkout mesa-25.2.4
 
     - name: 构建 Mesa
       run: |
