@@ -31,6 +31,11 @@ jobs:
         # 如果需要固定版本，可以取消下面注释
         git checkout mesa-25.2.4
 
+        # 🔧 自定义品牌修改（Turnip → Qualcomm Snapdragon）
+        sed -i 's/Turnip Adreno (TM) %s%s/Qualcomm Snapdragon Adreno (TM) %s%s/' src/freedreno/vulkan/tu_device.cc
+        sed -i 's/"turnip Mesa driver"/"Qualcomm Snapdragon Driver"/' src/freedreno/vulkan/tu_device.cc
+        sed -i 's/"Mesa " PACKAGE_VERSION MESA_GIT_SHA1/"Qualcomm Snapdragon " PACKAGE_VERSION MESA_GIT_SHA1/' src/freedreno/vulkan/tu_device.cc
+
     - name: 构建 Mesa
       run: |
         cd mesa
@@ -71,7 +76,8 @@ jobs:
         VERSION=$(cat VERSION)
         echo "VERSION=$VERSION" >> $GITHUB_ENV
 
-        tar -czf termux-glibc-mesa-${VERSION}-aarch64.tar.gz /data/data/com.termux/files/usr/glibc
+        # ✅ 仅打包 libvulkan_freedreno.so，但保持原始文件名逻辑
+        tar -czf termux-glibc-mesa-${VERSION}-aarch64.tar.gz -C builddir/src/freedreno/vulkan libvulkan_freedreno.so
         mv termux-glibc-mesa-${VERSION}-aarch64.tar.gz ..
 
     - name: 上传构建产物
@@ -91,5 +97,5 @@ jobs:
 
     - name: 输出版本信息
       run: |
-        echo "✅ Mesa 构建完成"
+        echo "✅ Mesa 构建完成（仅打包 libvulkan_freedreno.so）"
         echo "版本号: $VERSION"
