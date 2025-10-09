@@ -29,7 +29,7 @@ jobs:
         git clone https://gitlab.freedesktop.org/mesa/mesa.git
         cd mesa
         # 如果需要固定版本，可以取消下面注释
-        git checkout mesa-25.2.4
+        # git checkout mesa-25.2.4
 
         # 🔧 自定义品牌修改（Turnip → Qualcomm Snapdragon）
         sed -i 's/Turnip Adreno (TM) %s%s/Qualcomm Snapdragon Adreno (TM) %s%s/' src/freedreno/vulkan/tu_device.cc
