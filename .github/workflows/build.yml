@@ -1,4 +1,4 @@
-name: Build Mesa (aarch64)
+name: Build Mesa (aarch64, Auto Update + Detailed Log)
 
 on:
   workflow_dispatch:
@@ -6,42 +6,99 @@ on:
     branches:
       - main
       - 'refs/tags/**'
+  schedule:
+    # 每天北京时间早上 6 点（UTC+8 → UTC-8 = 22 点）
+    - cron: "0 22 * * *"
 
 permissions:
-  contents: write  # 允许 GITHUB_TOKEN 创建 Release
+  contents: write  # 允许创建 Release
+  actions: write
 
 jobs:
+  check-updates:
+    runs-on: ubuntu-24.04-arm
+    outputs:
+      new_commit: ${{ steps.check.outputs.new_commit }}
+      latest_hash: ${{ steps.check.outputs.latest_hash }}
+    steps:
+      - name: 检查 Mesa 上游更新
+        id: check
+        run: |
+          echo "🔍 检查 Mesa 上游提交..."
+          LATEST_HASH=$(git ls-remote https://gitlab.freedesktop.org/mesa/mesa.git refs/heads/main | awk '{print $1}')
+          echo "最新上游提交: $LATEST_HASH"
+
+          STATE_FILE=".mesa_latest_commit"
+          if [ -f "$STATE_FILE" ]; then
+            LAST_HASH=$(cat $STATE_FILE)
+          else
+            LAST_HASH=""
+          fi
+          echo "上次构建: $LAST_HASH"
+
+          if [ "$LATEST_HASH" != "$LAST_HASH" ]; then
+            echo "✅ 检测到新提交，触发构建"
+            echo "new_commit=true" >> $GITHUB_OUTPUT
+            echo "latest_hash=$LATEST_HASH" >> $GITHUB_OUTPUT
+          else
+            echo "❎ 没有新提交，跳过构建"
+            echo "new_commit=false" >> $GITHUB_OUTPUT
+          fi
+
   build:
+    needs: check-updates
+    if: ${{ needs.check-updates.outputs.new_commit == 'true' || github.event_name == 'workflow_dispatch' || github.event_name == 'push' }}
     runs-on: ubuntu-24.04-arm
 
     steps:
-    - name: 检出源码
+    - name: 检出仓库（保存状态文件）
       uses: actions/checkout@v4
+
+    - name: 显示构建环境信息
+      run: |
+        echo "🏗️ 构建环境:"
+        lsb_release -a || true
+        uname -a
+        echo "CPU 信息:"
+        lscpu | grep -E 'Model name|Architecture|CPU MHz|Core'
+        echo "内存使用情况:"
+        free -h
+        echo "磁盘空间:"
+        df -h
 
     - name: 安装依赖
       run: |
+        echo "📦 安装 Mesa 构建依赖..."
         sudo sed -i "s/^Types: deb$/Types: deb deb-src/" /etc/apt/sources.list.d/ubuntu.sources
         sudo apt update
         sudo apt-get build-dep mesa -y
+        echo "✅ 依赖安装完成"
 
     - name: 克隆 Mesa
       run: |
+        echo "📥 克隆 Mesa 仓库..."
         git clone https://gitlab.freedesktop.org/mesa/mesa.git
         cd mesa
-        # 如果需要固定版本，可以取消下面注释
-        # git checkout mesa-25.2.4
+        git checkout main
+        git pull origin main
 
-        # 🔧 自定义品牌修改（Turnip → Qualcomm Snapdragon）
+        echo "🔧 自定义品牌: Turnip → Qualcomm Snapdragon"
         sed -i 's/Turnip Adreno (TM) %s%s/Qualcomm Snapdragon Adreno (TM) %s%s/' src/freedreno/vulkan/tu_device.cc
         sed -i 's/"turnip Mesa driver"/"Qualcomm Snapdragon Driver"/' src/freedreno/vulkan/tu_device.cc
         sed -i 's/"Mesa " PACKAGE_VERSION MESA_GIT_SHA1/"Qualcomm Snapdragon " PACKAGE_VERSION MESA_GIT_SHA1/' src/freedreno/vulkan/tu_device.cc
 
+        echo "🧾 最新提交:"
+        git log -1 --oneline --decorate
+
     - name: 构建 Mesa
       run: |
         cd mesa
+        BUILD_START=$(date +%s)
+
         sudo mkdir -p /data/data/com.termux/files/usr/glibc
         sudo chmod 777 -R /data
 
+        echo "⚙️ 使用 Meson 配置构建..."
         mkdir -p builddir
         meson setup builddir \
           --libdir=lib \
@@ -70,32 +127,76 @@ jobs:
           -Dgbm=enabled \
           -Dtools=drm-shim,freedreno
 
-        ninja -C builddir
+        echo "🧱 开始编译..."
+        ninja -C builddir -j$(nproc)
+        echo "📦 安装到 glibc 目录..."
         ninja -C builddir install
 
-        VERSION=$(cat VERSION)
-        echo "VERSION=$VERSION" >> $GITHUB_ENV
+        BUILD_END=$(date +%s)
+        DURATION=$((BUILD_END - BUILD_START))
+        echo "🕒 构建耗时: ${DURATION} 秒"
 
-        # ✅ 仅打包 libvulkan_freedreno.so，但保持原始文件名逻辑
-        tar -czf termux-glibc-mesa-${VERSION}-aarch64.tar.gz -C builddir/src/freedreno/vulkan libvulkan_freedreno.so
-        mv termux-glibc-mesa-${VERSION}-aarch64.tar.gz ..
+        VERSION=$(cat VERSION)
+        GIT_HASH=$(git rev-parse --short HEAD)
+        echo "VERSION=${VERSION}" >> $GITHUB_ENV
+        echo "GIT_HASH=${GIT_HASH}" >> $GITHUB_ENV
+        echo "Mesa 版本: ${VERSION} (${GIT_HASH})"
+
+    - name: 打包构建产物
+      run: |
+        echo "📦 开始打包 Mesa 产物..."
+        cd mesa
+        TAR_NAME="termux-glibc-mesa-${VERSION}-aarch64.tar.gz"
+        tar -czvf "../${TAR_NAME}" -C builddir/src/freedreno/vulkan libvulkan_freedreno.so
+
+        echo "🧾 打包内容预览:"
+        tar -tvf "../${TAR_NAME}"
+
+        FILE_PATH="../${TAR_NAME}"
+        FILE_SIZE=$(du -h "$FILE_PATH" | cut -f1)
+        echo "📂 输出文件: $FILE_PATH"
+        echo "📏 文件大小: $FILE_SIZE"
+
+        echo "TAR_NAME=${TAR_NAME}" >> $GITHUB_ENV
 
     - name: 上传构建产物
       uses: actions/upload-artifact@v4
       with:
         name: termux-glibc-mesa-${{ env.VERSION }}-aarch64
-        path: termux-glibc-mesa-${{ env.VERSION }}-aarch64.tar.gz
+        path: ${{ env.TAR_NAME }}
 
     - name: 发布到 GitHub Release
       uses: softprops/action-gh-release@v1
       with:
-        tag_name: ${{ github.ref_name }}
+        tag_name: mesa-${{ env.VERSION }}
         name: Mesa ${{ env.VERSION }} (aarch64, Termux glibc)
-        files: termux-glibc-mesa-${{ env.VERSION }}-aarch64.tar.gz
+        body: |
+          🔧 **Mesa 自动构建信息**
+          - 🧱 版本: **${{ env.VERSION }}**
+          - 💡 提交: `${{ env.GIT_HASH }}`
+          - 🕒 构建耗时: 自动记录
+          - 📦 文件: `${{ env.TAR_NAME }}`
+          - 📂 包含: `libvulkan_freedreno.so`
+        files: ${{ env.TAR_NAME }}
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-    - name: 输出版本信息
+    - name: 保存最新提交记录
+      if: ${{ needs.check-updates.outputs.latest_hash != '' }}
       run: |
-        echo "✅ Mesa 构建完成（仅打包 libvulkan_freedreno.so）"
-        echo "版本号: $VERSION"
+        echo "${{ needs.check-updates.outputs.latest_hash }}" > .mesa_latest_commit
+        git config user.name "github-actions[bot]"
+        git config user.email "github-actions[bot]@users.noreply.github.com"
+        git add .mesa_latest_commit
+        git commit -m "Update Mesa commit record to ${{ needs.check-updates.outputs.latest_hash }}"
+        git push || true
+
+    - name: 输出总结信息
+      run: |
+        echo "✅ Mesa 构建与打包完成"
+        echo "📦 输出文件: ${{ env.TAR_NAME }}"
+        echo "🔖 Mesa 版本: ${{ env.VERSION }}"
+        echo "💾 提交哈希: ${{ env.GIT_HASH }}"
+        echo "📅 构建时间: $(date)"
+        echo "🌍 系统信息:"
+        uname -a
