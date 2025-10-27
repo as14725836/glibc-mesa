@@ -71,7 +71,7 @@ jobs:
         echo "📦 安装 Mesa 构建依赖..."
         sudo sed -i "s/^Types: deb$/Types: deb deb-src/" /etc/apt/sources.list.d/ubuntu.sources
         sudo apt update
-        sudo apt install libxrandr-dev libxxf86vm-dev libxcb-shm0-dev libxcb-glx0-dev libxext-dev libx11-dev libx11-xcb-dev libxcb1-dev libxcb-dri3-dev libxcb-present-dev libxcb-randr0-dev libxcb-sync-dev libxcb-xfixes0-dev libxshmfence-dev libdrm-dev libgbm-dev libegl1-mesa-dev libexpat1-dev libwayland-dev -y
+        sudo apt install glslang-tools libxrandr-dev libxxf86vm-dev libxcb-shm0-dev libxcb-glx0-dev libxext-dev libx11-dev libx11-xcb-dev libxcb1-dev libxcb-dri3-dev libxcb-present-dev libxcb-randr0-dev libxcb-sync-dev libxcb-xfixes0-dev libxshmfence-dev libdrm-dev libgbm-dev libegl1-mesa-dev libexpat1-dev libwayland-dev -y
         sudo apt install -y python3-pip
         pip3 install --user meson ninja mako
         echo "✅ 依赖安装完成"
