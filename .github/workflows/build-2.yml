@@ -21,11 +21,10 @@ jobs:
       new_commit: ${{ steps.check.outputs.new_commit }}
       latest_tag: ${{ steps.check.outputs.latest_tag }}
     steps:
-      - name: 检查 Mesa 最新正式稳定版
+      - name: 检查 Mesa 最新稳定版
         id: check
         run: |
           echo "🔍 检查 Mesa 最新稳定版 Tag..."
-          # 获取所有稳定版标签（格式：数字.数字.数字）
           LATEST_TAG=$(git ls-remote --tags https://gitlab.freedesktop.org/mesa/mesa.git | \
                        grep -E 'refs/tags/[0-9]+\.[0-9]+\.[0-9]+$' | \
                        awk -F'refs/tags/' '{print $2}' | \
@@ -69,7 +68,6 @@ jobs:
         run: |
           LATEST_TAG="${{ needs.check-updates.outputs.latest_tag }}"
           if [ -z "$LATEST_TAG" ] || [ "$LATEST_TAG" == "null" ]; then
-            # 如果从 check-updates 获取失败，重新获取
             LATEST_TAG=$(git ls-remote --tags https://gitlab.freedesktop.org/mesa/mesa.git | \
                          grep -E 'refs/tags/[0-9]+\.[0-9]+\.[0-9]+$' | \
                          awk -F'refs/tags/' '{print $2}' | \
@@ -87,7 +85,6 @@ jobs:
 
       - name: 安装依赖
         run: |
-          sudo sed -i "s/^Types: deb$/Types: deb deb-src/" /etc/apt/sources.list.d/ubuntu.sources
           sudo apt update
           sudo apt install -y build-essential git cmake bison flex pkg-config \
               glslang-tools libxrandr-dev libxxf86vm-dev libxcb-shm0-dev libxcb-glx0-dev \
@@ -99,26 +96,32 @@ jobs:
 
       - name: 克隆 Mesa 最新稳定版
         run: |
-          echo "📥 克隆 Mesa 仓库..."
+          set -e
           LATEST_TAG="${{ env.VERSION }}"
-          echo "正在克隆标签: $LATEST_TAG"
-          
-          # 先克隆仓库，然后检出特定标签
-          git clone --depth=1 https://gitlab.freedesktop.org/mesa/mesa.git mesa-source
+          echo "📥 准备克隆 Mesa 标签 $LATEST_TAG ..."
+
+          # 清理旧目录
+          [ -d mesa-source ] && rm -rf mesa-source
+
+          # 克隆完整历史
+          git clone https://gitlab.freedesktop.org/mesa/mesa.git mesa-source
           cd mesa-source
-          
-          # 检出特定标签
-          if git checkout $LATEST_TAG; then
-            echo "✅ 成功检出标签: $LATEST_TAG"
-          else
-            echo "❌ 无法检出标签 $LATEST_TAG，尝试获取完整历史"
-            cd ..
-            rm -rf mesa-source
-            git clone https://gitlab.freedesktop.org/mesa/mesa.git mesa-source
-            cd mesa-source
-            git checkout $LATEST_TAG
-          fi
-          
+
+          # 重试机制：最多 3 次
+          for i in 1 2 3; do
+            if git fetch --tags && git checkout "tags/$LATEST_TAG"; then
+              echo "✅ 成功检出标签 $LATEST_TAG"
+              break
+            else
+              echo "⚠️ 检出失败，重试第 $i 次..."
+              sleep 5
+              if [ "$i" -eq 3 ]; then
+                echo "❌ 已尝试 3 次仍失败，退出"
+                exit 1
+              fi
+            fi
+          done
+
           echo "🔧 构建版本信息:"
           git log -1 --oneline
           GIT_HASH=$(git rev-parse --short HEAD)
@@ -128,15 +131,7 @@ jobs:
         run: |
           cd mesa-source
           echo "🏗️ 开始构建 Mesa..."
-          
-          # 创建必要的目录
-          sudo mkdir -p /data/data/com.termux/files/usr/glibc
-          sudo chmod 777 -R /data
-
-          # 创建构建目录
           mkdir -p builddir
-          
-          # 配置构建选项
           meson setup builddir \
             --libdir=lib \
             -Dprefix=/data/data/com.termux/files/usr/glibc \
@@ -164,31 +159,23 @@ jobs:
             -Dgbm=enabled \
             -Dtools=drm-shim,freedreno
 
-          # 构建
           echo "🔨 编译中..."
           ninja -C builddir -j$(nproc)
-          
-          # 安装到临时目录
+
           echo "📦 安装中..."
           DESTDIR=$(pwd)/install ninja -C builddir install
-          
           echo "✅ Mesa 构建完成"
 
       - name: 打包构建产物
         run: |
           cd mesa-source
           TAR_NAME="termux-glibc-mesa-${{ env.VERSION }}-aarch64.tar.gz"
-          
-          # 打包所有安装的文件
           mkdir -p package
           cp -r install/data/data/com.termux/files/usr/glibc/* package/ || true
-          
-          # 特别包含 vulkan 驱动
           if [ -f builddir/src/freedreno/vulkan/libvulkan_freedreno.so ]; then
             mkdir -p package/lib
             cp builddir/src/freedreno/vulkan/libvulkan_freedreno.so package/lib/
           fi
-          
           tar -czvf "../${TAR_NAME}" -C package .
           echo "TAR_NAME=${TAR_NAME}" >> $GITHUB_ENV
           echo "📦 打包完成: ${TAR_NAME}"
@@ -201,20 +188,18 @@ jobs:
           retention-days: 30
 
       - name: 发布到 GitHub Release
-        if: ${{ github.event_name != 'schedule' }} # 定时任务不自动发布
+        if: ${{ github.event_name != 'schedule' }}
         uses: softprops/action-gh-release@v1
         with:
           tag_name: mesa-${{ env.VERSION }}
           name: Mesa ${{ env.VERSION }} (aarch64, Termux glibc)
           body: |
             🔧 **Mesa 自动构建信息**
-            
             - 🧱 版本: **${{ env.VERSION }}**
             - 💡 提交: `${{ env.GIT_HASH }}`
             - 📦 文件: `${{ env.TAR_NAME }}`
             - 🏗️ 架构: aarch64
             - 📋 平台: Termux glibc
-            
             ## 驱动支持
             - ✅ Gallium: zink, freedreno
             - ✅ Vulkan: freedreno
