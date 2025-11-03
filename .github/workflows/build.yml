@@ -1,4 +1,4 @@
-name: Build Mesa (aarch64, Auto Update + Detailed Log)
+name: 开发版 Mesa (aarch64, Auto Update + Detailed Log)
 
 on:
   workflow_dispatch:
