@@ -124,7 +124,6 @@ jobs:
             -Dshader-cache=enabled \
             -Dxlib-lease=enabled \
             -Dvulkan-beta=true \
-            -Dosmesa=true \
             -Dlibunwind=disabled \
             -Dvalgrind=disabled \
             -Dmicrosoft-clc=disabled \
