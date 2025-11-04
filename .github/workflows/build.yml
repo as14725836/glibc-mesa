@@ -124,6 +124,13 @@ jobs:
             -Dshader-cache=enabled \
             -Dxlib-lease=enabled \
             -Dvulkan-beta=true \
+            -Dosmesa=true \
+            -Dlibunwind=disabled \
+            -Dvalgrind=disabled \
+            -Dmicrosoft-clc=disabled \
+            -Dgallium-extra-hud=true \
+            -Dgallium-va=enabled \
+            -Dgallium-vdpau=enabled \
             -Dgallium-drivers=zink,freedreno \
             -Dvulkan-drivers=freedreno \
             -Dfreedreno-kmds=msm,kgsl \
