@@ -11,7 +11,7 @@ on:
     - cron: "0 22 * * *"
 
 permissions:
-  contents: write  # 允许创建 Release
+  contents: write
   actions: write
 
 jobs:
@@ -51,7 +51,7 @@ jobs:
     runs-on: ubuntu-24.04-arm
 
     steps:
-      - name: 检出仓库（包含状态文件）
+      - name: 检出仓库
         uses: actions/checkout@v4
 
       - name: 显示构建环境信息
@@ -98,7 +98,6 @@ jobs:
         run: |
           cd mesa
           BUILD_START=$(date +%s)
-
           sudo mkdir -p /data/data/com.termux/files/usr/glibc
           sudo chmod 777 -R /data
 
@@ -152,30 +151,44 @@ jobs:
           GIT_HASH=$(git rev-parse --short HEAD)
           echo "VERSION=${VERSION}" >> $GITHUB_ENV
           echo "GIT_HASH=${GIT_HASH}" >> $GITHUB_ENV
-          echo "Mesa 版本: ${VERSION} (${GIT_HASH})"
 
       - name: 打包构建产物
         run: |
           echo "📦 开始打包 Mesa 产物..."
           cd mesa
+          PACK_START=$(date +%s)
+
+          # === 1️⃣ Vulkan 驱动最小包 ===
           TAR_NAME="termux-glibc-mesa-${VERSION}-aarch64.tar.gz"
           tar -czvf "../${TAR_NAME}" -C builddir/src/freedreno/vulkan libvulkan_freedreno.so
 
-          echo "🧾 打包内容预览:"
-          tar -tvf "../${TAR_NAME}"
+          # === 2️⃣ 完整 glibc Mesa 环境包 ===
+          FULL_TAR="glibc-mesa-${VERSION}-aarch64.tar.gz"
+          tar -czvf "../${FULL_TAR}" -C /data/data/com.termux/files/usr glibc
 
-          FILE_PATH="../${TAR_NAME}"
-          FILE_SIZE=$(du -h "$FILE_PATH" | cut -f1)
-          echo "📂 输出文件: $FILE_PATH"
-          echo "📏 文件大小: $FILE_SIZE"
+          # === 3️⃣ 生成 SHA256 校验文件 ===
+          cd ..
+          sha256sum "${TAR_NAME}" > "${TAR_NAME}.sha256"
+          sha256sum "${FULL_TAR}" > "${FULL_TAR}.sha256"
 
+          PACK_END=$(date +%s)
+          PACK_DUR=$((PACK_END - PACK_START))
+          echo "🕒 打包耗时: ${PACK_DUR} 秒"
+
+          echo "📂 输出文件:"
+          du -h ${TAR_NAME} ${FULL_TAR} | sort -h
           echo "TAR_NAME=${TAR_NAME}" >> $GITHUB_ENV
+          echo "FULL_TAR=${FULL_TAR}" >> $GITHUB_ENV
 
       - name: 上传构建产物
         uses: actions/upload-artifact@v4
         with:
-          name: termux-glibc-mesa-${{ env.VERSION }}-aarch64
-          path: ${{ env.TAR_NAME }}
+          name: mesa-artifacts-${{ env.VERSION }}-aarch64
+          path: |
+            ${{ env.TAR_NAME }}
+            ${{ env.FULL_TAR }}
+            ${{ env.TAR_NAME }}.sha256
+            ${{ env.FULL_TAR }}.sha256
 
       - name: 发布到 GitHub Release
         uses: softprops/action-gh-release@v1
@@ -186,10 +199,16 @@ jobs:
             🔧 **Mesa 自动构建信息**
             - 🧱 版本: **${{ env.VERSION }}**
             - 💡 提交: `${{ env.GIT_HASH }}`
-            - 🕒 构建耗时: 自动记录
-            - 📦 文件: `${{ env.TAR_NAME }}`
-            - 📂 包含: `libvulkan_freedreno.so`
-          files: ${{ env.TAR_NAME }}
+            - 🕒 自动构建与打包成功
+            - 📦 产物列表:
+              - `${{ env.TAR_NAME }}` → 仅 Vulkan 驱动
+              - `${{ env.FULL_TAR }}` → 完整 glibc Mesa 环境
+            - 🔐 每个压缩包均附带 `.sha256` 校验文件
+          files: |
+            ${{ env.TAR_NAME }}
+            ${{ env.FULL_TAR }}
+            ${{ env.TAR_NAME }}.sha256
+            ${{ env.FULL_TAR }}.sha256
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -206,9 +225,9 @@ jobs:
       - name: 输出总结信息
         run: |
           echo "✅ Mesa 构建与打包完成"
-          echo "📦 输出文件: ${{ env.TAR_NAME }}"
           echo "🔖 Mesa 版本: ${{ env.VERSION }}"
           echo "💾 提交哈希: ${{ env.GIT_HASH }}"
+          echo "📦 文件:"
+          ls -lh ${{ env.TAR_NAME }}* ${{ env.FULL_TAR }}*
           echo "📅 构建时间: $(date)"
-          echo "🌍 系统信息:"
           uname -a
