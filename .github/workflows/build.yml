@@ -129,7 +129,6 @@ jobs:
             -Dmicrosoft-clc=disabled \
             -Dgallium-extra-hud=true \
             -Dgallium-va=enabled \
-            -Dgallium-vdpau=enabled \
             -Dgallium-drivers=zink,freedreno \
             -Dvulkan-drivers=freedreno \
             -Dfreedreno-kmds=msm,kgsl \
