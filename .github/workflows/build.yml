@@ -116,10 +116,10 @@ jobs:
             -Dopengl=true \
             -Dgles1=enabled \
             -Dgles2=enabled \
-            -Dglvnd=disabled \
+            -Dglvnd=enabled \
             -Degl=enabled \
-            -Dllvm=disabled \
-            -Dshared-llvm=disabled \
+            -Dllvm=enabled \
+            -Dshared-llvm=enabled \
             -Dshader-cache=enabled \
             -Dxlib-lease=enabled \
             -Dvulkan-beta=true \
@@ -128,10 +128,10 @@ jobs:
             -Dmicrosoft-clc=disabled \
             -Dgallium-rusticl=false \
             -Dgallium-extra-hud=true \
-            -Dgallium-drivers=zink,freedreno \
+            -Dgallium-drivers=zink,freedreno,llvmpipe,softpipe \
             -Dgallium-rusticl-enable-drivers=freedreno \
             -Dshader-cache-default=true \
-            -Dvulkan-drivers=freedreno \
+            -Dvulkan-drivers=freedreno,swrast,virtio \
             -Dfreedreno-kmds=msm,kgsl \
             -Dvideo-codecs=all \
             -Dmediafoundation-codecs=all \
