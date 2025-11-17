@@ -1,0 +1,297 @@
+name: 测试 Mesa (aarch64, Auto Update + Detailed Log)
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - 'refs/tags/**'
+  schedule:
+    # 每天北京时间早上 6 点（UTC+8 → UTC-8 = 22 点）
+    - cron: "0 22 * * *"
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  check-updates:
+    runs-on: ubuntu-24.04-arm
+    outputs:
+      new_commit: ${{ steps.check.outputs.new_commit }}
+      latest_hash: ${{ steps.check.outputs.latest_hash }}
+    steps:
+      - name: 检查 Mesa 上游更新
+        id: check
+        run: |
+          echo "🔍 检查 Mesa 上游提交..."
+
+          # 获取你仓库的最新提交
+          LATEST_HASH=$(git ls-remote https://github.com/DvaMishkiLapa/mesa-turnip-kgsl-build.git HEAD | awk '{print $1}')
+          echo "最新上游提交: $LATEST_HASH"
+
+          STATE_FILE=".mesa_latest_commit"
+          if [ -f "$STATE_FILE" ]; then
+            LAST_HASH=$(cat $STATE_FILE)
+          else
+            LAST_HASH=""
+          fi
+          echo "上次构建: $LAST_HASH"
+
+          if [ "$LATEST_HASH" != "$LAST_HASH" ]; then
+            echo "✅ 检测到新提交，触发构建"
+            echo "new_commit=true" >> $GITHUB_OUTPUT
+            echo "latest_hash=$LATEST_HASH" >> $GITHUB_OUTPUT
+          else
+            echo "❎ 没有新提交，跳过构建"
+            echo "new_commit=false" >> $GITHUB_OUTPUT
+          fi
+
+  build:
+    needs: check-updates
+    if: ${{ needs.check-updates.outputs.new_commit == 'true' || github.event_name == 'workflow_dispatch' || github.event_name == 'push' }}
+    runs-on: ubuntu-24.04-arm
+
+    steps:
+      - name: 检出仓库
+        uses: actions/checkout@v4
+
+      - name: 显示构建环境信息
+        run: |
+          echo "🏗️ 构建环境:"
+          lsb_release -a || true
+          uname -a
+          echo "CPU 信息:"
+          lscpu | grep -E 'Model name|Architecture|CPU MHz|Core'
+          echo "内存使用情况:"
+          free -h
+          echo "磁盘空间:"
+          df -h
+
+      - name: 安装依赖
+        run: |
+          echo "📦 安装 Mesa 构建依赖..."
+          sudo sed -i "s/^Types: deb$/Types: deb deb-src/" /etc/apt/sources.d/ubuntu.sources 2>/dev/null || true
+          sudo sed -i "s/^Types: deb$/Types: deb deb-src/" /etc/apt/sources.list.d/ubuntu.sources 2>/dev/null || true
+          sudo apt update
+          sudo apt install -y glslang-tools libxrandr-dev libxxf86vm-dev libxcb-shm0-dev libxcb-glx0-dev \
+              libxext-dev llvm-19 libx11-dev libx11-xcb-dev libxcb1-dev libxcb-dri3-dev libxcb-present-dev \
+              libxcb-randr0-dev libxcb-sync-dev libxcb-xfixes0-dev libxshmfence-dev libdrm-dev \
+              libgbm-dev libegl1-mesa-dev libexpat1-dev libwayland-dev python3-pip
+          pip3 install --user meson ninja mako
+          echo "✅ 依赖安装完成"
+
+      - name: 克隆 Mesa 仓库
+        run: |
+          echo "📥 克隆 Mesa Turnip KGSL 仓库..."
+          git clone https://github.com/DvaMishkiLapa/mesa-turnip-kgsl-build.git
+          cd mesa-turnip-kgsl-build
+          git checkout main || git checkout master || true
+          git pull || true
+
+          echo "🔧 自定义品牌: Turnip → Qualcomm Snapdragon"
+          # these sed's may fail if files are different; ignore errors
+          sed -i 's/Turnip Adreno (TM) %s%s/Qualcomm Snapdragon Adreno (TM) %s%s/' src/freedreno/vulkan/tu_device.cc || true
+          sed -i 's/\"turnip Mesa driver\"/\"Qualcomm Snapdragon Driver\"/' src/freedreno/vulkan/tu_device.cc || true
+          sed -i 's/\"Mesa \" PACKAGE_VERSION MESA_GIT_SHA1/\"Qualcomm Snapdragon \" PACKAGE_VERSION MESA_GIT_SHA1/' src/freedreno/vulkan/tu_device.cc || true
+
+          echo "🧾 最新提交:"
+          git log -1 --oneline --decorate || true
+
+      - name: 写入并应用补丁（x11_dri3 修复）
+        run: |
+          set -e
+          echo "🧩 创建 patches 目录并写入补丁文件..."
+          mkdir -p patches
+          cat > patches/x11_dri3_fix.patch <<'PATCHEOF'
+*** Begin Patch
+*** Update File: path/to/affected/file.c
+@@
+-      xshmfence_await(chain->images[*image_index].shm_fence);
+-#endif
+-
+-    return result;
+- }
+-@@ -2142,15 +2121,24 @@ x11_image_init(VkDevice device_h, struct x11_swapchain *chain,
+-      if (fd == -1)
+-         return VK_ERROR_OUT_OF_HOST_MEMORY;
+-
+-      cookie =
+-         xcb_dri3_pixmap_from_buffer_checked(chain->conn,
+-                                             image->pixmap,
+-                                             chain->window,
+-                                             image->base.sizes[0],
+-                                             pCreateInfo->imageExtent.width,
+-                                             pCreateInfo->imageExtent.height,
+-                                             image->base.row_pitches[0],
+-                                             chain->depth, bpp, fd);
+-+      cookie = xcb_dri3_pixmap_from_buffers_checked(chain->conn,
+-+                                                    image->pixmap,
+-+                                                    chain->window,
+-+                                                    image->base.num_planes,
+-+                                                    pCreateInfo->imageExtent.width,
+-+                                                    pCreateInfo->imageExtent.height,
+-+                                                    image->base.row_pitches[0],
+-+                                                    image->base.offsets[0],
+-+                                                    0,
+-+                                                    0,
+-+                                                    0,
+-+                                                    0,
+-+                                                    0,
+-+                                                    0,
+-+                                                    chain->depth,
+-+                                                    bpp,
+-+                                                    1274,
+-+                                                    &fd);
+-     }
+-
+-    error = xcb_request_check(chain->conn, cookie);
+-@@ -2180,6 +2168,9 @@ x11_image_init(VkDevice device_h, struct x11_swapchain *chain,
+-    }
+- #endif
+-
+-+   image->sync_fence = 0;
+-+   return VK_SUCCESS;
+-+
+- out_fence:
+-    fence_fd = xshmfence_alloc_shm();
+-    if (fence_fd < 0)
+-@@ -2222,12 +2213,6 @@ x11_image_finish(struct x11_swapchain *chain,
+- {
+-    xcb_void_cookie_t cookie;
+-    if (!chain->base.wsi->sw || chain->has_mit_shm) {
+--#ifdef HAVE_X11_DRM
+--      cookie = xcb_sync_destroy_fence(chain->conn, image->sync_fence);
+--      xcb_discard_reply(chain->conn, cookie.sequence);
+--      xshmfence_unmap_shm(image->shm_fence);
+--#endif
+-
+-       cookie = xcb_free_pixmap(chain->conn, image->pixmap);
+-       xcb_discard_reply(chain->conn, cookie.sequence);
+- #ifdef HAVE_X11_DRM
+*** End Patch
+PATCHEOF
+
+          echo "🧩 试图在仓库内应用补丁..."
+          # 尝试定位仓库并应用补丁；若路径不同请调整
+          if [ -d "mesa-turnip-kgsl-build" ]; then
+            cd mesa-turnip-kgsl-build
+          fi
+
+          # 显示 git 状态，方便调试
+          git status --porcelain --untracked-files=all || true
+
+          # 尝试应用补丁（失败则输出日志并退出）
+          if git apply --whitespace=fix --verbose ../patches/x11_dri3_fix.patch; then
+            echo "✅ 补丁应用成功"
+            git add -A || true
+            git commit -m "Apply x11_dri3_fix patch" || echo "no commit (maybe nothing changed)"
+          else
+            echo "❌ 补丁应用失败：请检查补丁路径或上下文是否匹配仓库源码"
+            echo "补丁文件内容预览："
+            sed -n '1,200p' ../patches/x11_dri3_fix.patch || true
+            exit 1
+          fi
+
+      - name: 构建 Mesa
+        run: |
+          cd mesa-turnip-kgsl-build
+          BUILD_START=$(date +%s)
+          sudo mkdir -p /data/data/com.termux/files/usr/glibc
+          sudo chmod 777 -R /data
+
+          echo "⚙️ 配置 Meson..."
+          mkdir -p builddir
+          meson setup builddir \
+            --libdir=lib \
+            -Dprefix=/data/data/com.termux/files/usr/glibc \
+            -Dbuildtype=release \
+            -Doptimization=3 \
+            -Db_lto=true \
+            -Dplatforms=x11 \
+            -Degl-native-platform=x11 \
+            -Dglx=dri \
+            -Dglx-direct=true \
+            -Dopengl=true \
+            -Dgles1=enabled \
+            -Dgles2=enabled \
+            -Dglvnd=enabled \
+            -Degl=enabled \
+            -Dllvm=enabled \
+            -Dshared-llvm=enabled \
+            -Dshader-cache=enabled \
+            -Dxlib-lease=enabled \
+            -Dvulkan-beta=true \
+            -Dlibunwind=disabled \
+            -Dvalgrind=disabled \
+            -Dmicrosoft-clc=disabled \
+            -Dgallium-rusticl=false \
+            -Dgallium-extra-hud=true \
+            -Dgallium-drivers=zink,freedreno,llvmpipe,softpipe \
+            -Dgallium-rusticl-enable-drivers=freedreno \
+            -Dshader-cache-default=true \
+            -Dvulkan-drivers=freedreno,swrast,virtio \
+            -Dfreedreno-kmds=msm,kgsl \
+            -Dvideo-codecs=all \
+            -Dmediafoundation-codecs=all \
+            -Dgbm=enabled \
+            -Dtools=drm-shim,freedreno
+
+          echo "🧱 开始编译..."
+          ninja -C builddir -j$(nproc)
+          ninja -C builddir install
+
+          BUILD_END=$(date +%s)
+          echo "🕒 构建耗时: $((BUILD_END - BUILD_START)) 秒"
+
+          VERSION=$(cat VERSION)
+          GIT_HASH=$(git rev-parse --short HEAD)
+          echo "VERSION=${VERSION}" >> $GITHUB_ENV
+          echo "GIT_HASH=${GIT_HASH}" >> $GITHUB_ENV
+
+      - name: 打包构建产物
+        run: |
+          echo "📦 开始打包..."
+          cd mesa-turnip-kgsl-build
+          PACK_START=$(date +%s)
+
+          TAR_NAME="termux-glibc-mesa-${VERSION}-aarch64.tar.gz"
+          FULL_TAR="glibc-mesa-${VERSION}-aarch64.tar.gz"
+
+          tar -czvf "../${TAR_NAME}" -C builddir/src/freedreno/vulkan libvulkan_freedreno.so
+          tar -czvf "../${FULL_TAR}" -C /data/data/com.termux/files/usr glibc
+
+          cd ..
+          sha256sum "${TAR_NAME}" > "${TAR_NAME}.sha256"
+          sha256sum "${FULL_TAR}" > "${FULL_TAR}.sha256"
+
+          echo "📂 输出文件:"
+          du -h ${TAR_NAME} ${FULL_TAR}
+
+      - name: 上传构建产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: mesa-artifacts-${{ env.VERSION }}-aarch64
+          path: |
+            ${{ env.TAR_NAME }}
+            ${{ env.FULL_TAR }}
+            ${{ env.TAR_NAME }}.sha256
+            ${{ env.FULL_TAR }}.sha256
+
+      - name: 保存最新提交记录
+        if: ${{ needs.check-updates.outputs.latest_hash != '' }}
+        run: |
+          echo "${{ needs.check-updates.outputs.latest_hash }}" > .mesa_latest_commit
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add .mesa_latest_commit || true
+          git commit -m "Update Mesa commit record to ${{ needs.check-updates.outputs.latest_hash }}" || true
+          git push || true
+
+      - name: 输出总结信息
+        run: |
+          echo "✅ Mesa 构建与打包完成"
+          echo "🔖 Mesa 版本: ${{ env.VERSION }}"
+          echo "💾 提交哈希: ${{ env.GIT_HASH }}"
+          echo "📅 构建时间: $(date)"
+          uname -a
