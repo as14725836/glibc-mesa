@@ -113,13 +113,10 @@ jobs:
             -Degl-native-platform=x11 \
             -Dglx=dri \
             -Dglx-direct=true \
-            -Db_lto=true \
-            -Dc_args="-O3 -mcpu=cortex-x3 -mtune=cortex-x3 -fomit-frame-pointer -ffunction-sections -fdata-sections -flto=auto" \
-            -Dcpp_args="-O3 -mcpu=cortex-x3 -mtune=cortex-x3 -fomit-frame-pointer -ffunction-sections -fdata-sections -flto=auto -fno-rtti -fno-exceptions" \
             -Dopengl=true \
             -Dgles1=enabled \
             -Dgles2=enabled \
-            -Dglvnd=enabled \
+            -Dglvnd=disabled \
             -Degl=enabled \
             -Dllvm=enabled \
             -Dshared-llvm=enabled \
