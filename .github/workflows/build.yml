@@ -194,7 +194,7 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           tag_name: mesa-${{ env.VERSION }}
-          name: Mesa ${{ env.VERSION }} (aarch64, Termux glibc)
+          name: 开发版 Mesa ${{ env.VERSION }} (aarch64, Termux glibc)
           body: |
             🔧 **Mesa 自动构建信息**
             - 🧱 版本: **${{ env.VERSION }}**
