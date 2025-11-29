@@ -85,6 +85,9 @@ jobs:
           cd mesa
           git checkout main
           git pull origin main
+      - name: Apply exact-ad710-fix patch
+        run: |
+         patch -p1 < exact-ad710-fix.patch
 
           echo "🔧 自定义品牌: Turnip → Qualcomm Snapdragon"
           sed -i 's/Turnip Adreno (TM) %s%s/Qualcomm Snapdragon Adreno (TM) %s%s/' src/freedreno/vulkan/tu_device.cc
