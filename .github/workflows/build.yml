@@ -87,6 +87,7 @@ jobs:
           git pull origin main
       - name: Apply exact-ad710-fix patch
         run: |
+         cd mesa
          patch -p1 < ../exact-ad710-fix.patch
 
           echo "🔧 自定义品牌: Turnip → Qualcomm Snapdragon"
