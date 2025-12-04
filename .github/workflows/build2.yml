@@ -117,7 +117,7 @@ jobs:
             -Dllvm=enabled \
             -Dshared-llvm=enabled \
             -Dshader-cache=enabled \
-            -Dshared-glapi=true \
+            -Dshared-glapi=enabled \
             -Dxlib-lease=enabled \
             -Dvulkan-beta=true \
             -Dlibunwind=disabled \
